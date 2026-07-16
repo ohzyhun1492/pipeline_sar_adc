@@ -57,7 +57,7 @@ catch ME
 end
 
 %% 3. 충분한 주기의 시뮬레이션을 먼저 진행하여 원본 데이터 확보
-model_name = 'tb_pipeline_sar_adc';
+model_name = 'pipeline_sar_adc';
 if ~bdIsLoaded(model_name), open_system(model_name); end
 if evalin('base', 'exist(''Digital_OUT'',''var'')')
     evalin('base', 'clear Digital_OUT');

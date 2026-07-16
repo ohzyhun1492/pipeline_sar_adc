@@ -28,7 +28,7 @@ AMPoff = 0.001;       % AMP Static Offset
 
 show_debug = 'NO';   
 
-model_name = 'tb_pipeline_sar_adc';
+model_name = 'pipeline_sar_adc';
 if ~bdIsLoaded(model_name), open_system(model_name); end
 
 %% 2. 루프 실행 (몬테카를로 시뮬레이션)

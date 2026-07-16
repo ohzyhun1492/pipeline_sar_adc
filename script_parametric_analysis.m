@@ -7,7 +7,7 @@
 clc; clear; close all;
 
 % 1. Vin 가변 배열 정의 (-1부터 1까지 0.1 간격, 총 21개)
-Vin_array = -1:0.1:1; 
+Vin_array = -1:0.5:1; 
 total_runs = length(Vin_array);
 
 % 2. 시각화를 위한 Figure 설정 (하나의 그래프에 누적)
