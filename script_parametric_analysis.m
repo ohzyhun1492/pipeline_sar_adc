@@ -1,5 +1,5 @@
 %% ========================================================================
-%% 메인 스크립트: Vin Parametric Sweep & 순수 simout 파형 plot
+%% 메인 스크립트: Vin Parametric Sweep & Dout 파형 plot
 %% ========================================================================
 
 %%%script_spectrum의 9번 코드와 1번 코드의 Vin을 주석처리 하고 돌릴 것
@@ -44,14 +44,14 @@ for idx = 1:total_runs
         colors = jet(total_runs); Vin_array = -1:0.1:1;
     end
     
-    % 4. 순수 simout 데이터 적출 (구조체든 변수든 다 찾아냄)
-    current_simout = [];
-    if exist('simout', 'var')
-        current_simout = simout;
-    elseif exist('out', 'var') && isprop(out, 'simout')
-        current_simout = out.get('simout');
-    elseif exist('ans', 'var') && isprop(ans, 'simout')
-        current_simout = ans.get('simout');
+    % 4. 순수 Dout 데이터 적출 (구조체든 변수든 다 찾아냄)
+    current_Dout = [];
+    if exist('Dout', 'var')
+        current_Dout = Dout;
+    elseif exist('out', 'var') && isprop(out, 'Dout')
+        current_Dout = out.get('Dout');
+    elseif exist('ans', 'var') && isprop(ans, 'Dout')
+        current_Dout = ans.get('Dout');
     end
     
     % 5. 주요 지점(-1, 0, 1)만 범례 이름 설정
@@ -62,11 +62,11 @@ for idx = 1:total_runs
     end
     
     % 6. 하나의 그래프에 누적 plot (Timeseries 및 일반 배열 대응)
-    if isa(current_simout, 'timeseries')
-        plot(current_simout.Time * 1e6, current_simout.Data, 'Color', colors(idx, :), 'LineWidth', 1.2, 'DisplayName', plot_disp);
+    if isa(current_Dout, 'timeseries')
+        plot(current_Dout.Time * 1e6, current_Dout.Data, 'Color', colors(idx, :), 'LineWidth', 1.2, 'DisplayName', plot_disp);
         x_label_str = 'Time (\mus)';
     else
-        plot(current_simout, 'Color', colors(idx, :), 'LineWidth', 1.2, 'DisplayName', plot_disp);
+        plot(current_Dout, 'Color', colors(idx, :), 'LineWidth', 1.2, 'DisplayName', plot_disp);
         x_label_str = 'Sample Index';
     end
 end
@@ -75,7 +75,7 @@ end
 hold off;
 xlabel(x_label_str);
 ylabel('Output Signal Amplitude (V)');
-title('Simulink simout Output Signal Waveform (Parametric Sweep)');
+title('Simulink Dout Output Signal Waveform (Parametric Sweep)');
 legend('show', 'Location', 'best');
 
 disp('====================================================');

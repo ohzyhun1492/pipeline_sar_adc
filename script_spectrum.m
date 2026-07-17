@@ -11,7 +11,7 @@ total_bits = bit_1st + bit_2nd;
 fin = (M / N) * fs;    
 sim_time = (M + 3) / fin; % spectrum analysis  
 
-%% 1. Non-ideality 파라미터 설정 (Cap Mismatch, Comparator, Amplifier)
+%% 1. Non-ideality 파라미터 설정 (Cap Mismatch, Comparator, Amplifier, Thermal Noise)
 show_debug = 'NO';   
 
 sigma_u_1st = 0;
@@ -23,35 +23,58 @@ CMPoff_2nd = 0;
 AMPno = 0;
 AMPoff = 0;
 
+% --- Thermal Noise (kT/C) 파라미터 ---
+Temp = 300;
+
+Cu_1st = 8e-15;
+Cu_2nd = 1e-15;
+
+kTC_en_1st = 1;
+kTC_en_2nd = 1;
+
+kB = 1.380649e-23;
+
+C_1st = Cu_1st * 2^bit_1st;
+C_2nd = Cu_2nd * 2^(bit_2nd - 1);
+
+sigma_kTC_1st = sqrt(kB * Temp / C_1st);
+sigma_kTC_2nd = sqrt(kB * Temp / C_2nd);
+
+var_kTC_1st = kTC_en_1st * sigma_kTC_1st^2;
+var_kTC_2nd = kTC_en_2nd * sigma_kTC_2nd^2;
+
+mean_kTC = 0;
+
+% kT/C 노이즈 seed (매 실행마다 랜덤)
+seed_kTC_1st = randi(1e6);
+seed_kTC_2nd = randi(1e6);
+
 % sigma_u_1st = 0.0001;  % 1st-stage Cap Mismatch
 % sigma_u_2nd = 0.0004;  % 2nd-stage Cap Mismatch
-% 
 % CMPno_1st = 0.0001;    % 1st-stage CMP Noise (Vnstd)
 % CMPno_2nd = 0.001;     % 2nd-stage CMP Noise (Vnstd)
 % CMPoff_1st = 0.001;    % 1st-stage CMP offset Mismatch (Vos)
 % CMPoff_2nd = 0.001;    % 2nd-stage CMP offset Mismatch (Vos)
-% 
-% % --- [NEW] 1st-stage Residue Amplifier(AMP) 파라미터 추가 ---
-% AMPno = 0.0001;    % AMP Dynamic Noise
-% AMPoff = 0.0001;   % AMP Static Offset 
+% AMPno = 0.0001;        % AMP Dynamic Noise
+% AMPoff = 0.0001;       % AMP Static Offset 
 
 %% 2. CDAC Mismatch 주입 및 가중치 생성
 try
     % --- 1st Stage CDAC Mismatch 주입 ---
     [DACunit_1st] = generateMismatchADCunit(bit_1st, sigma_u_1st, show_debug);
     DAC_1st_full = generateBinaryADCvalue(bit_1st, DACunit_1st);
-    DAC_1st_scaled = DAC_1st_full * (2^bit_1st); % 정수 스케일 복원
+    DAC_1st_scaled = DAC_1st_full * (2^bit_1st);
     DAC_1st = DAC_1st_scaled(1 : (bit_1st + 1)) / (2^bit_1st); 
     
-if bit_2nd > 0
-    % --- 2nd Stage CDAC Mismatch 주입 ---
-    [DACunit_2nd] = generateMismatchADCunit(bit_2nd, sigma_u_2nd, show_debug);
-    DAC_2nd_full = generateBinaryADCvalue(bit_2nd, DACunit_2nd);
-    DAC_2nd_scaled = DAC_2nd_full * (2^bit_2nd); 
-    DAC_2nd = DAC_2nd_scaled(1 : bit_2nd) / (2^(bit_2nd-1));
-else
-    DAC_2nd = 0;
-end
+    if bit_2nd > 0
+        % --- 2nd Stage CDAC Mismatch 주입 ---
+        [DACunit_2nd] = generateMismatchADCunit(bit_2nd, sigma_u_2nd, show_debug);
+        DAC_2nd_full = generateBinaryADCvalue(bit_2nd, DACunit_2nd);
+        DAC_2nd_scaled = DAC_2nd_full * (2^bit_2nd); 
+        DAC_2nd = DAC_2nd_scaled(1 : bit_2nd) / (2^(bit_2nd-1));
+    else
+        DAC_2nd = 0;
+    end
 catch ME
     warning('DAC 가중치 생성 및 미스매치 주입 에러: %s', ME.message);
 end
@@ -69,9 +92,9 @@ fprintf('▶ 시뮬레이션 완료. 데이터 수집 및 정밀 슬라이싱을
 
 %% 4. 확보된 전체 데이터에서 실제 샘플링 데이터 정밀 추출 및 M주기 슬라이싱
 if exist('out','var')
-    try temp_data = out.simout; catch, if exist('simout','var'), temp_data = simout; else, error('Workspace에서 출력 데이터를 찾을 수 없습니다.'); end, end
-elseif exist('simout','var')
-    temp_data = simout;
+    try temp_data = out.Dout; catch, if exist('Dout','var'), temp_data = simout; else, error('Workspace에서 출력 데이터를 찾을 수 없습니다.'); end, end
+elseif exist('Dout','var')
+    temp_data = Dout;
 else
     error('Workspace에서 출력 데이터를 찾을 수 없습니다.');
 end
@@ -130,6 +153,11 @@ fprintf('    - Offset      : %.2f mV (≈ %.2f LSB)\n', AMPoff*1e3, AMPoff/lsb_1
 fprintf('  ▶ 2nd-Stage Comparator:\n');
 fprintf('    - Noise (rms) : %.2f mV (≈ %.2f LSB)\n', CMPno_2nd*1e3, CMPno_2nd/lsb_15bit);
 fprintf('    - Offset      : %.2f mV (≈ %.2f LSB)\n', CMPoff_2nd*1e3, CMPoff_2nd/lsb_15bit);
+fprintf('  ▶ Sampling Thermal Noise (kT/C) @ Temp=%.0fK:\n', Temp);
+fprintf('    - 1st Stage (Cu=%.1f fF) : sigma = %.2f uV (≈ %.2f LSB)  [%s]\n', ...
+        Cu_1st*1e15, sigma_kTC_1st*1e6, sigma_kTC_1st/lsb_15bit, ternary(kTC_en_1st,'ON','OFF'));
+fprintf('    - 2nd Stage (Cu=%.1f fF) : sigma = %.2f uV (≈ %.2f LSB)  [%s]\n', ...
+        Cu_2nd*1e15, sigma_kTC_2nd*1e6, sigma_kTC_2nd/lsb_15bit, ternary(kTC_en_2nd,'ON','OFF'));
 fprintf('--------------------------------------------------------------------\n');
 fprintf('▶ [CDAC Weights 전체 리스트 확인 (MSB -> LSB 정렬)]\n');
 if exist('DAC_1st', 'var')
@@ -148,13 +176,98 @@ if exist('DAC_2nd', 'var') && bit_2nd > 0
 end
 fprintf('====================================================================\n');
 
-%% 7. 플롯 시각화 (필요시 주석 해제)
-figure('Color', 'w', 'Name', 'Pipeline SAR ADC Verification');
-plot(f*1e-6, power_spec, 'LineWidth', 1.2, 'Color', [0 0.45 0.74]); grid on; hold on;
-plot(f(top_idx)*1e-6, power_spec(top_idx), 'ro', 'MarkerSize', 8, 'LineWidth', 2);
-xlabel('Frequency (MHz)');
-ylabel('Power (dB)');
-title({sprintf('Pipeline SAR ADC Spectrum (ENOB: %.2f bits, SNDR: %.2f dB)', ENOB, SNDR), ...
+%% 7. 플롯 시각화 (하나의 창에 탭으로 통합)
+
+main_fig = figure('Color', 'w', 'Position', [100, 100, 1200, 700], ...
+                  'Name', 'Pipeline SAR ADC Analysis');
+tabgroup = uitabgroup(main_fig);
+
+% ==================== Tab 1: FFT 스펙트럼 ====================
+tab1 = uitab(tabgroup, 'Title', 'FFT Spectrum');
+ax1 = axes('Parent', tab1);
+
+plot(ax1, f*1e-6, power_spec, 'LineWidth', 1.2, 'Color', [0 0.45 0.74]); 
+grid(ax1, 'on'); hold(ax1, 'on');
+plot(ax1, f(top_idx)*1e-6, power_spec(top_idx), 'ro', 'MarkerSize', 8, 'LineWidth', 2);
+xlabel(ax1, 'Frequency (MHz)');
+ylabel(ax1, 'Power (dB)');
+title(ax1, {sprintf('Pipeline SAR ADC Spectrum (ENOB: %.2f bits, SNDR: %.2f dB)', ENOB, SNDR), ...
        sprintf('Mismatch Applied: 1st \\sigma=%.2f%%, 2nd \\sigma=%.2f%%', sigma_u_1st*100, sigma_u_2nd*100)}, ...
        'FontSize', 11);
-ylim([-120 5]);
+ylim(ax1, [-120 5]);
+
+% ==================== Tab 2: Vres / Vres_amp 비교 ====================
+tab2 = uitab(tabgroup, 'Title', 'Residue Voltage');
+
+ax2a = subplot(1, 2, 1, 'Parent', tab2);
+try
+    if isa(out.Vres, 'timeseries')
+        plot(ax2a, out.Vres.Time * 1e6, out.Vres.Data, 'LineWidth', 1.2, 'Color', [0 0.45 0.74]);
+    else
+        plot(ax2a, out.Vres, 'LineWidth', 1.2, 'Color', [0 0.45 0.74]);
+    end
+    grid(ax2a, 'on'); 
+    xlabel(ax2a, 'Time (\mus)'); 
+    ylabel(ax2a, 'Voltage (V)');
+    title(ax2a, 'V_{res} (Before Residue Amp)');
+catch
+    text(ax2a, 0.5, 0.5, 'out.Vres 없음', 'HorizontalAlignment', 'center'); 
+    axis(ax2a, 'off');
+end
+
+ax2b = subplot(1, 2, 2, 'Parent', tab2);
+try
+    if isa(out.Vres_amp, 'timeseries')
+        plot(ax2b, out.Vres_amp.Time * 1e6, out.Vres_amp.Data, 'LineWidth', 1.2, 'Color', [0.85 0.33 0.10]);
+    else
+        plot(ax2b, out.Vres_amp, 'LineWidth', 1.2, 'Color', [0.85 0.33 0.10]);
+    end
+    grid(ax2b, 'on'); 
+    xlabel(ax2b, 'Time (\mus)'); 
+    ylabel(ax2b, 'Voltage (V)');
+    title(ax2b, 'V_{res\_amp} (After Residue Amp)');
+catch
+    text(ax2b, 0.5, 0.5, 'out.Vres_amp 없음', 'HorizontalAlignment', 'center'); 
+    axis(ax2b, 'off');
+end
+
+% ==================== Tab 3: kT/C 노이즈 (N1, N2) ====================
+tab3 = uitab(tabgroup, 'Title', 'kT/C Noise');
+
+% N1: 1st Stage CDAC noise
+ax3a = subplot(2, 1, 1, 'Parent', tab3);
+try
+    if isa(out.N1, 'timeseries')
+        plot(ax3a, out.N1.Time * 1e6, out.N1.Data * 1e6, 'LineWidth', 1.0, 'Color', [0 0.45 0.74]);
+    else
+        plot(ax3a, out.N1 * 1e6, 'LineWidth', 1.0, 'Color', [0 0.45 0.74]);
+    end
+    grid(ax3a, 'on'); 
+    ylabel(ax3a, 'Noise (\muV)');
+    title(ax3a, sprintf('N1: 1st Stage CDAC kT/C Noise (\\sigma = %.2f \\muV)', sigma_kTC_1st*1e6));
+catch
+    text(ax3a, 0.5, 0.5, 'out.N1 없음', 'HorizontalAlignment', 'center'); 
+    axis(ax3a, 'off');
+end
+
+% N2: 2nd Stage CDAC noise
+ax3b = subplot(2, 1, 2, 'Parent', tab3);
+try
+    if isa(out.N2, 'timeseries')
+        plot(ax3b, out.N2.Time * 1e6, out.N2.Data * 1e6, 'LineWidth', 1.0, 'Color', [0.85 0.33 0.10]);
+    else
+        plot(ax3b, out.N2 * 1e6, 'LineWidth', 1.0, 'Color', [0.85 0.33 0.10]);
+    end
+    grid(ax3b, 'on'); 
+    ylabel(ax3b, 'Noise (\muV)'); 
+    xlabel(ax3b, 'Time (\mus)');
+    title(ax3b, sprintf('N2: 2nd Stage CDAC kT/C Noise (\\sigma = %.2f \\muV)', sigma_kTC_2nd*1e6));
+catch
+    text(ax3b, 0.5, 0.5, 'out.N2 없음', 'HorizontalAlignment', 'center'); 
+    axis(ax3b, 'off');
+end
+
+%% Helper Function
+function s = ternary(cond, a, b)
+    if cond, s = a; else, s = b; end
+end

@@ -24,6 +24,39 @@ CMPoff_2nd = 0;
 AMPno = 0;
 AMPoff = 0;
 
+Temp = 300;
+
+Cu_1st = 8e-15;
+Cu_big = 32e-15;
+Cu_2nd = 1e-15;
+
+% kT/C 노이즈 on/off (0 = off, 1 = on)
+kTC_en_1st = 1;
+kTC_en_big = 1;
+kTC_en_2nd = 1;
+
+% --- kT/C 샘플링 노이즈 파라미터 계산 ---
+% Binary weighted CDAC + dummy cap 가정 → 총 unit = 2^(bit-1)
+kB = 1.380649e-23;
+
+C_1st = Cu_1st * 2^bit_1st;
+C_big = Cu_big * 2^(bit_1st - 1);
+C_2nd = Cu_2nd * 2^(bit_2nd - 1);
+
+sigma_kTC_1st = sqrt(kB * Temp / C_1st);
+sigma_kTC_big = sqrt(kB * Temp / C_big);
+sigma_kTC_2nd = sqrt(kB * Temp / C_2nd);
+
+var_kTC_1st = kTC_en_1st * sigma_kTC_1st^2;
+var_kTC_big = kTC_en_big * sigma_kTC_big^2;
+var_kTC_2nd = kTC_en_2nd * sigma_kTC_2nd^2;
+
+mean_kTC = 0;
+
+seed_kTC_1st = randi(2^31);
+seed_kTC_big = randi(2^31);
+seed_kTC_2nd = randi(2^31);
+
 % sigma_u_1st = 0.0001;  % 1st-stage Small CDAC (판정용) Cap Mismatch
 % sigma_u_big = 0.0001;  % 1st-stage Big CDAC (residue 생성용) Cap Mismatch  ★신규
 % sigma_u_2nd = 0.0004;  % 2nd-stage Cap Mismatch
@@ -44,7 +77,7 @@ try
     [DACunit_1st] = generateMismatchADCunit(bit_1st, sigma_u_1st, show_debug);
     DAC_1st_full = generateBinaryADCvalue(bit_1st, DACunit_1st);
     DAC_1st_scaled = DAC_1st_full * (2^bit_1st); % 정수 스케일 복원
-    DAC_1st = DAC_1st_scaled(1 : (bit_1st + 1)) / (2^bit_1st); 
+    DAC_1st = DAC_1st_scaled(1 : bit_1st) / (2^(bit_1st-1)); 
 
     % --- 1st Stage Big CDAC (residue 생성용) Mismatch 주입 ★신규 ---
     % Small과 독립된 새 랜덤 실현 (별도 sigma_u_big 사용), 스케일/길이는 DAC_1st과 동일 규칙
@@ -79,9 +112,9 @@ fprintf('▶ 시뮬레이션 완료. 데이터 수집 및 정밀 슬라이싱을
 
 %% 4. 확보된 전체 데이터에서 실제 샘플링 데이터 정밀 추출 및 M주기 슬라이싱
 if exist('out','var')
-    try temp_data = out.simout; catch, if exist('simout','var'), temp_data = simout; else, error('Workspace에서 출력 데이터를 찾을 수 없습니다.'); end, end
-elseif exist('simout','var')
-    temp_data = simout;
+    try temp_data = out.Dout; catch, if exist('Dout','var'), temp_data = Dout; else, error('Workspace에서 출력 데이터를 찾을 수 없습니다.'); end, end
+elseif exist('Dout','var')
+    temp_data = Dout;
 else
     error('Workspace에서 출력 데이터를 찾을 수 없습니다.');
 end
@@ -168,13 +201,118 @@ if exist('DAC_2nd', 'var') && bit_2nd > 0
 end
 fprintf('====================================================================\n');
 
-%% 7. 플롯 시각화
-figure('Color', 'w', 'Name', 'Pipeline SAR ADC Verification');
-plot(f*1e-6, power_spec, 'LineWidth', 1.2, 'Color', [0 0.45 0.74]); grid on; hold on;
-plot(f(top_idx)*1e-6, power_spec(top_idx), 'ro', 'MarkerSize', 8, 'LineWidth', 2);
-xlabel('Frequency (MHz)');
-ylabel('Power (dB)');
-title({sprintf('Pipeline SAR ADC (Multi-CDAC) Spectrum (ENOB: %.2f bits, SNDR: %.2f dB)', ENOB, SNDR), ...
-       sprintf('Mismatch Applied: Small \\sigma=%.2f%%, Big \\sigma=%.2f%%, 2nd \\sigma=%.2f%%', sigma_u_1st*100, sigma_u_big*100, sigma_u_2nd*100)}, ...
+%% 7. 플롯 시각화 (하나의 창에 탭으로 통합)
+
+main_fig = figure('Color', 'w', 'Position', [100, 100, 1200, 700], ...
+                  'Name', 'Pipeline SAR ADC Analysis');
+tabgroup = uitabgroup(main_fig);
+
+% ==================== Tab 1: FFT 스펙트럼 ====================
+tab1 = uitab(tabgroup, 'Title', 'FFT Spectrum');
+ax1 = axes('Parent', tab1);
+
+plot(ax1, f*1e-6, power_spec, 'LineWidth', 1.2, 'Color', [0 0.45 0.74]); 
+grid(ax1, 'on'); hold(ax1, 'on');
+plot(ax1, f(top_idx)*1e-6, power_spec(top_idx), 'ro', 'MarkerSize', 8, 'LineWidth', 2);
+xlabel(ax1, 'Frequency (MHz)');
+ylabel(ax1, 'Power (dB)');
+title(ax1, {sprintf('Pipeline SAR ADC (Multi-CDAC) Spectrum (ENOB: %.2f bits, SNDR: %.2f dB)', ENOB, SNDR), ...
+       sprintf('Mismatch Applied: Small \\sigma=%.2f%%, Big \\sigma=%.2f%%, 2nd \\sigma=%.2f%%', ...
+               sigma_u_1st*100, sigma_u_big*100, sigma_u_2nd*100)}, ...
        'FontSize', 11);
-ylim([-120 5]);
+ylim(ax1, [-120 5]);
+
+% ==================== Tab 2: Vres / Vres_amp 비교 ====================
+tab2 = uitab(tabgroup, 'Title', 'Residue Voltage');
+
+ax2a = subplot(1, 2, 1, 'Parent', tab2);
+try
+    if isa(out.Vres, 'timeseries')
+        plot(ax2a, out.Vres.Time * 1e6, out.Vres.Data, 'LineWidth', 1.2, 'Color', [0 0.45 0.74]);
+    else
+        plot(ax2a, out.Vres, 'LineWidth', 1.2, 'Color', [0 0.45 0.74]);
+    end
+    grid(ax2a, 'on'); 
+    xlabel(ax2a, 'Time (\mus)'); 
+    ylabel(ax2a, 'Voltage (V)');
+    title(ax2a, 'V_{res} (Before Residue Amp)');
+catch
+    text(ax2a, 0.5, 0.5, 'out.Vres 없음', 'HorizontalAlignment', 'center'); 
+    axis(ax2a, 'off');
+end
+
+ax2b = subplot(1, 2, 2, 'Parent', tab2);
+try
+    if isa(out.Vres_amp, 'timeseries')
+        plot(ax2b, out.Vres_amp.Time * 1e6, out.Vres_amp.Data, 'LineWidth', 1.2, 'Color', [0.85 0.33 0.10]);
+    else
+        plot(ax2b, out.Vres_amp, 'LineWidth', 1.2, 'Color', [0.85 0.33 0.10]);
+    end
+    grid(ax2b, 'on'); 
+    xlabel(ax2b, 'Time (\mus)'); 
+    ylabel(ax2b, 'Voltage (V)');
+    title(ax2b, 'V_{res\_amp} (After Residue Amp)');
+catch
+    text(ax2b, 0.5, 0.5, 'out.Vres_amp 없음', 'HorizontalAlignment', 'center'); 
+    axis(ax2b, 'off');
+end
+
+% ==================== Tab 3: kT/C 노이즈 (N1, N2, N3) ====================
+tab3 = uitab(tabgroup, 'Title', 'kT/C Noise');
+
+% N1: 1st Small CDAC noise
+ax3a = subplot(3, 1, 1, 'Parent', tab3);
+try
+    if isa(out.N1, 'timeseries')
+        plot(ax3a, out.N1.Time * 1e6, out.N1.Data * 1e6, 'LineWidth', 1.0, 'Color', [0 0.45 0.74]);
+    else
+        plot(ax3a, out.N1 * 1e6, 'LineWidth', 1.0, 'Color', [0 0.45 0.74]);
+    end
+    grid(ax3a, 'on'); 
+    ylabel(ax3a, 'Noise (\muV)');
+    title(ax3a, sprintf('N1: 1st Small CDAC kT/C Noise (\\sigma = %.2f \\muV)  [%s]', ...
+          sigma_kTC_1st*1e6, ternary(kTC_en_1st,'ON','OFF')));
+catch
+    text(ax3a, 0.5, 0.5, 'out.N1 없음', 'HorizontalAlignment', 'center'); 
+    axis(ax3a, 'off');
+end
+
+% N2: 1st Big CDAC noise
+ax3b = subplot(3, 1, 2, 'Parent', tab3);
+try
+    if isa(out.N2, 'timeseries')
+        plot(ax3b, out.N2.Time * 1e6, out.N2.Data * 1e6, 'LineWidth', 1.0, 'Color', [0.85 0.33 0.10]);
+    else
+        plot(ax3b, out.N2 * 1e6, 'LineWidth', 1.0, 'Color', [0.85 0.33 0.10]);
+    end
+    grid(ax3b, 'on'); 
+    ylabel(ax3b, 'Noise (\muV)');
+    title(ax3b, sprintf('N2: 1st Big CDAC kT/C Noise (\\sigma = %.2f \\muV)  [%s]', ...
+          sigma_kTC_big*1e6, ternary(kTC_en_big,'ON','OFF')));
+catch
+    text(ax3b, 0.5, 0.5, 'out.N2 없음', 'HorizontalAlignment', 'center'); 
+    axis(ax3b, 'off');
+end
+
+% N3: 2nd Stage CDAC noise
+ax3c = subplot(3, 1, 3, 'Parent', tab3);
+try
+    if isa(out.N3, 'timeseries')
+        plot(ax3c, out.N3.Time * 1e6, out.N3.Data * 1e6, 'LineWidth', 1.0, 'Color', [0.47 0.67 0.19]);
+    else
+        plot(ax3c, out.N3 * 1e6, 'LineWidth', 1.0, 'Color', [0.47 0.67 0.19]);
+    end
+    grid(ax3c, 'on'); 
+    ylabel(ax3c, 'Noise (\muV)'); 
+    xlabel(ax3c, 'Time (\mus)');
+    title(ax3c, sprintf('N3: 2nd Stage CDAC kT/C Noise (\\sigma = %.2f \\muV)  [%s]', ...
+          sigma_kTC_2nd*1e6, ternary(kTC_en_2nd,'ON','OFF')));
+catch
+    text(ax3c, 0.5, 0.5, 'out.N3 없음', 'HorizontalAlignment', 'center'); 
+    axis(ax3c, 'off');
+end
+
+%% Helper Function
+function s = ternary(cond, a, b)
+    if cond, s = a; else, s = b; end
+end
