@@ -2,7 +2,7 @@
 clc; clear; close all;
 
 %% 1. 글로벌 및 시뮬레이션 반복 설정
-num_simulations = 10;     % ◀ 반복할 시뮬레이션 횟수 지정 (원하는 만큼 변경 가능)
+num_simulations = 100;     % ◀ 반복할 시뮬레이션 횟수 지정 (원하는 만큼 변경 가능)
 enob_history = zeros(num_simulations, 1);  % ENOB 결과 저장용 배열
 sndr_history = zeros(num_simulations, 1); % SNDR 결과 저장용 배열
 
@@ -16,15 +16,17 @@ total_bits = bit_1st + bit_2nd - 1;
 fin = (M / N) * fs;    
 sim_time = (M + 3) / fin; 
 
-sigma_u_1st = 0.00035;       % 1st-stage Small CDAC (판정용) Cap mismatch
-sigma_u_1st_v2 = 0.00018;    % 1st-stage Big CDAC (residue 생성용) Cap mismatch
-sigma_u_2nd = 0.001;       % 2nd-stage Cap mismatch 
+sigma_u_1st = 0.0018;       % 1st-stage Small CDAC (판정용) Cap mismatch
+sigma_u_1st_v2 = 0.0009;    % 1st-stage Big CDAC (residue 생성용) Cap mismatch
+sigma_u_2nd = 0.005;       % 2nd-stage Cap mismatch 
 CMPno_1st = 0;         % 1st-stage CMP noise
 CMPno_2nd = 0;         % 2nd-stage CMP noise
 CMPoff_1st = 0;        % 1st-stage CMP offset
 CMPoff_2nd = 0;        % 2nd-stage CMP offset
 AMPno = 0;             % AMP Dynamic Noise
 AMPoff = 0;            % AMP Static Offset 
+
+
 
 % --- Thermal Noise (kT/C) 파라미터 ---
 Temp = 300;

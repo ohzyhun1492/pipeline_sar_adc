@@ -16,8 +16,8 @@ total_bits = bit_1st + bit_2nd - 1;
 fin = (M / N) * fs;    
 sim_time = (M + 3) / fin; 
 
-sigma_u_1st = 0.00035;       % 1st-stage Small CDAC (판정용) Cap mismatch
-sigma_u_2nd = 0.001;       % 2nd-stage Cap mismatch 
+sigma_u_1st = 0.0018;       % 1st-stage Small CDAC (판정용) Cap mismatch
+sigma_u_2nd = 0.005;       % 2nd-stage Cap mismatch 
 CMPno_1st = 0;         % 1st-stage CMP noise
 CMPno_2nd = 0;         % 2nd-stage CMP noise
 CMPoff_1st = 0;        % 1st-stage CMP offset
