@@ -3,7 +3,7 @@ clc;
 %%close all;
 fs = 100e6;          % Simulink 블록들이 참조하는 실제 샘플링 주파수 (100MHz)
 N = 1024;            % FFT 분석에 사용할 순수 샘플 개수 (Number of Samples)
-M = 5;               % 입력 신호의 정확한 타겟 주기 횟수 (Cycles)
+M = 3;               % 입력 신호의 정확한 타겟 주기 횟수 (Cycles)
 Vin = 0.95;           
 bit_1st = 6;         
 bit_2nd = 9;         
@@ -24,6 +24,10 @@ CMPoff_2nd = 0;
 AMPno = 0;
 AMPoff = 0;
 
+% --- CDAC Clock Skew  ---
+CDAC_skew = 1e-9;                             
+assignin('base', 'CDAC_skew', CDAC_skew);
+
 Temp = 300;
 
 Cu_1st = 8e-15;
@@ -39,9 +43,9 @@ kTC_en_2nd = 1;
 % Binary weighted CDAC + dummy cap 가정 → 총 unit = 2^(bit-1)
 kB = 1.380649e-23;
 
-C_1st = Cu_1st * 2^bit_1st;
-C_big = Cu_big * 2^(bit_1st - 1);
-C_2nd = Cu_2nd * 2^(bit_2nd - 1);
+C_1st = Cu_1st * 2^(bit_1st-1);
+C_big = Cu_big * 2^bit_1st;
+C_2nd = Cu_2nd * 2^(bit_2nd-1);
 
 sigma_kTC_1st = sqrt(kB * Temp / C_1st);
 sigma_kTC_big = sqrt(kB * Temp / C_big);
@@ -57,19 +61,7 @@ seed_kTC_1st = randi(2^31);
 seed_kTC_big = randi(2^31);
 seed_kTC_2nd = randi(2^31);
 
-% sigma_u_1st = 0.0001;  % 1st-stage Small CDAC (판정용) Cap Mismatch
-% sigma_u_big = 0.0001;  % 1st-stage Big CDAC (residue 생성용) Cap Mismatch  ★신규
-% sigma_u_2nd = 0.0004;  % 2nd-stage Cap Mismatch
-% 
-% CMPno_1st = 0.0001;    % 1st-stage CMP Noise (Vnstd)
-% CMPno_2nd = 0.001;     % 2nd-stage CMP Noise (Vnstd)
-% CMPoff_1st = 0.001;    % 1st-stage CMP offset Mismatch (Vos)
-% CMPoff_2nd = 0.001;    % 2nd-stage CMP offset Mismatch (Vos)
-% 
-% % --- [NEW] 1st-stage Residue Amplifier(AMP) 파라미터 추가 ---
-% AMPno = 0.0001;    % AMP Dynamic Noise
-% AMPoff = 0.0001;   % AMP Static Offset 
-% ※ Big CDAC은 판정을 하지 않으므로 CMP noise/offset 없음 (미스매치만 존재)
+
 
 %% 2. CDAC Mismatch 주입 및 가중치 생성
 try

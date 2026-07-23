@@ -26,7 +26,7 @@ AMPoff = 0;
 % --- Thermal Noise (kT/C) 파라미터 ---
 Temp = 300;
 
-Cu_1st = 8e-15;
+Cu_1st = 32e-15;
 Cu_2nd = 1e-15;
 
 kTC_en_1st = 1;
